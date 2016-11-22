@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -18,22 +18,19 @@
 #ifndef __ZMQCONTEX_H
 #define __ZMQCONTEX_H
 
+#include "Common.h"
 #include <zmqpp/zmqpp.hpp>
 #include <mutex>
 
 /*
  * We need to serialize access to zmq context otherwise stuff blows up.
  */
-class ZmqContext 
+class TC_IPC_API ZmqContext
 {
 public:
-    ~ZmqContext();
+    static ZmqContext* Instance();
 
-    static ZmqContext* Instance()
-    {
-        static ZmqContext instance;
-        return &instance;
-    }
+    ~ZmqContext();
 
     zmqpp::socket* CreateNewSocket(zmqpp::socket_type);
     void Initialize();

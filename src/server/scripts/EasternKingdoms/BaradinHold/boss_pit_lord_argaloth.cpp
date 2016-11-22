@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -47,7 +47,22 @@ class boss_pit_lord_argaloth : public CreatureScript
 
         struct boss_pit_lord_argalothAI : public BossAI
         {
-            boss_pit_lord_argalothAI(Creature* creature) : BossAI(creature, DATA_ARGALOTH) { }
+            boss_pit_lord_argalothAI(Creature* creature) : BossAI(creature, DATA_ARGALOTH)
+            {
+                Initialize();
+            }
+
+            void Initialize()
+            {
+                first_fel_firestorm = false;
+                second_fel_firestorm = false;
+            }
+
+            void Reset() override
+            {
+                _Reset();
+                Initialize();
+            }
 
             void EnterCombat(Unit* /*who*/) override
             {
@@ -58,8 +73,10 @@ class boss_pit_lord_argaloth : public CreatureScript
                 events.ScheduleEvent(EVENT_BERSERK, 5 * MINUTE * IN_MILLISECONDS);
             }
 
-            void EnterEvadeMode() override
+            void EnterEvadeMode(EvadeReason /*why*/) override
             {
+                first_fel_firestorm = false;
+                second_fel_firestorm = false;
                 me->GetMotionMaster()->MoveTargetedHome();
                 instance->SendEncounterUnit(ENCOUNTER_FRAME_DISENGAGE, me);
                 _DespawnAtEvade();
@@ -67,9 +84,14 @@ class boss_pit_lord_argaloth : public CreatureScript
 
             void DamageTaken(Unit* /*attacker*/, uint32& damage) override
             {
-                if (me->HealthBelowPctDamaged(33, damage) ||
-                    me->HealthBelowPctDamaged(66, damage))
+                if (me->HealthBelowPctDamaged(66, damage) && !first_fel_firestorm)
                 {
+                    first_fel_firestorm = true;
+                    DoCastAOE(SPELL_FEL_FIRESTORM);
+                }
+                else if (me->HealthBelowPctDamaged(33, damage) && !second_fel_firestorm)
+                {
+                    second_fel_firestorm = true;
                     DoCastAOE(SPELL_FEL_FIRESTORM);
                 }
             }
@@ -112,6 +134,10 @@ class boss_pit_lord_argaloth : public CreatureScript
 
                 DoMeleeAttackIfReady();
             }
+
+        private:
+            bool first_fel_firestorm;
+            bool second_fel_firestorm;
         };
 
         CreatureAI* GetAI(Creature* creature) const override
@@ -183,7 +209,7 @@ class spell_argaloth_meteor_slash : public SpellScriptLoader
             }
 
         private:
-            uint32 _targetCount;
+            uint32 _targetCount =0;
         };
 
         SpellScript* GetSpellScript() const override

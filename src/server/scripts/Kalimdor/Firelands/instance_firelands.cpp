@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -19,6 +19,16 @@
 #include "InstanceScript.h"
 #include "firelands.h"
 
+DoorData const doorData[] =
+{
+    {GO_LORD_RHYOLITH_BRIDGE,    DATA_LORD_RHYOLITH,      DOOR_TYPE_ROOM},
+    {GO_BETH_TILAC_DOOR,         DATA_BETH_TILAC,         DOOR_TYPE_ROOM},
+    //{GO_BALEROC_FIREWALL,        DATA_BALEROC,            DOOR_TYPE_ROOM},
+    {GO_MAJORDOMO_FIREWALL,      DATA_MAJORDOMO_STAGHELM, DOOR_TYPE_PASSAGE},
+    {GO_RAGNAROS_DOOR,           DATA_RAGNAROS,           DOOR_TYPE_ROOM},
+    {0,                          0,                       DOOR_TYPE_ROOM}, //END
+}; //Baleroc door is special, it depends on the health status of the other bosses in the instance
+
 class instance_firelands : public InstanceMapScript
 {
     public:
@@ -30,6 +40,7 @@ class instance_firelands : public InstanceMapScript
             {
                 SetHeaders(DataHeader);
                 SetBossNumber(EncounterCount);
+                LoadDoorData(doorData);
             }
 
             void OnCreatureCreate(Creature* creature) override
@@ -40,8 +51,26 @@ class instance_firelands : public InstanceMapScript
                         // Cannot directly start attacking here as the creature is not yet on map
                         creature->m_Events.AddEvent(new DelayedAttackStartEvent(creature), creature->m_Events.CalculateTime(500));
                         break;
+                    case NPC_BALEROC:
+                        BalerocGUID = creature->GetGUID();
+                        break;
                 }
             }
+
+            ObjectGuid GetGuidData(uint32 type) const override
+            {
+                switch (type)
+                {
+                    case DATA_BALEROC:
+                        return BalerocGUID;
+                }
+
+                return ObjectGuid::Empty;
+            }
+
+            private:
+                ObjectGuid BalerocGUID;
+
         };
 
         InstanceScript* GetInstanceScript(InstanceMap* map) const override

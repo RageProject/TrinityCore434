@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
  * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -39,7 +39,7 @@ class ChargeDropEvent;
 // update aura target map every 500 ms instead of every update - reduce amount of grid searcher calls
 #define UPDATE_TARGET_MAP_INTERVAL 500
 
-class AuraApplication
+class TC_GAME_API AuraApplication
 {
     friend void Unit::_ApplyAura(AuraApplication * aurApp, uint8 effMask);
     friend void Unit::_UnapplyAura(AuraApplicationMap::iterator &i, AuraRemoveMode removeMode);
@@ -82,7 +82,7 @@ class AuraApplication
         void ClientUpdate(bool remove = false);
 };
 
-class Aura
+class TC_GAME_API Aura
 {
     friend Aura* Unit::_TryStackingOrRefreshingExistingAura(SpellInfo const* newAura, uint8 effMask, Unit* caster, int32 *baseAmount, Item* castItem, ObjectGuid casterGUID);
     public:
@@ -113,7 +113,7 @@ class Aura
         void _Remove(AuraRemoveMode removeMode);
         virtual void Remove(AuraRemoveMode removeMode = AURA_REMOVE_BY_DEFAULT) = 0;
 
-        virtual void FillTargetMap(std::map<Unit*, uint8> & targets, Unit* caster) = 0;
+        virtual void FillTargetMap(std::unordered_map<Unit*, uint8>& targets, Unit* caster) = 0;
         void UpdateTargetMap(Unit* caster, bool apply = true);
 
         void _RegisterForTargets() {Unit* caster = GetCaster(); UpdateTargetMap(caster, false);}
@@ -161,8 +161,8 @@ class Aura
         {
             return GetCasterGUID() == target->GetGUID()
                     && m_spellInfo->Stances
-                    && !(m_spellInfo->AttributesEx2 & SPELL_ATTR2_NOT_NEED_SHAPESHIFT)
-                    && !(m_spellInfo->Attributes & SPELL_ATTR0_NOT_SHAPESHIFT);
+                    && !m_spellInfo->HasAttribute(SPELL_ATTR2_NOT_NEED_SHAPESHIFT)
+                    && !m_spellInfo->HasAttribute(SPELL_ATTR0_NOT_SHAPESHIFT);
         }
 
         bool CanBeSaved() const;
@@ -204,7 +204,7 @@ class Aura
         // and some dependant problems fixed before it can replace old proc system (for example cooldown handling)
         // currently proc system functionality is implemented in Unit::ProcDamageAndSpell
         bool IsProcOnCooldown() const;
-        void AddProcCooldown(uint32 msec);
+        void AddProcCooldown(Milliseconds msec);
         bool IsUsingCharges() const { return m_isUsingCharges; }
         void SetUsingCharges(bool val) { m_isUsingCharges = val; }
         void PrepareProcToTrigger(AuraApplication* aurApp, ProcEventInfo& eventInfo);
@@ -273,7 +273,7 @@ class Aura
         Unit::AuraApplicationList m_removedApplications;
 };
 
-class UnitAura : public Aura
+class TC_GAME_API UnitAura : public Aura
 {
     friend Aura* Aura::Create(SpellInfo const* spellproto, uint8 effMask, WorldObject* owner, Unit* caster, int32 *baseAmount, Item* castItem, ObjectGuid casterGUID);
     protected:
@@ -284,17 +284,17 @@ class UnitAura : public Aura
 
         void Remove(AuraRemoveMode removeMode = AURA_REMOVE_BY_DEFAULT) override;
 
-        void FillTargetMap(std::map<Unit*, uint8> & targets, Unit* caster) override;
+        void FillTargetMap(std::unordered_map<Unit*, uint8>& targets, Unit* caster) override;
 
         // Allow Apply Aura Handler to modify and access m_AuraDRGroup
         void SetDiminishGroup(DiminishingGroup group) { m_AuraDRGroup = group; }
         DiminishingGroup GetDiminishGroup() const { return m_AuraDRGroup; }
 
     private:
-        DiminishingGroup m_AuraDRGroup:8;               // Diminishing
+        DiminishingGroup m_AuraDRGroup;               // Diminishing
 };
 
-class DynObjAura : public Aura
+class TC_GAME_API DynObjAura : public Aura
 {
     friend Aura* Aura::Create(SpellInfo const* spellproto, uint8 effMask, WorldObject* owner, Unit* caster, int32 *baseAmount, Item* castItem, ObjectGuid casterGUID);
     protected:
@@ -302,15 +302,15 @@ class DynObjAura : public Aura
     public:
         void Remove(AuraRemoveMode removeMode = AURA_REMOVE_BY_DEFAULT) override;
 
-        void FillTargetMap(std::map<Unit*, uint8> & targets, Unit* caster) override;
+        void FillTargetMap(std::unordered_map<Unit*, uint8>& targets, Unit* caster) override;
 };
 
-class ChargeDropEvent : public BasicEvent
+class TC_GAME_API ChargeDropEvent : public BasicEvent
 {
     friend class Aura;
     protected:
         ChargeDropEvent(Aura* base, AuraRemoveMode mode) : _base(base), _mode(mode) { }
-        bool Execute(uint64 /*e_time*/, uint32 /*p_time*/);
+        bool Execute(uint64 /*e_time*/, uint32 /*p_time*/) override;
 
     private:
         Aura* _base;

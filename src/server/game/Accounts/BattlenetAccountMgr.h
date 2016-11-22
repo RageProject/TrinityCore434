@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -29,13 +29,13 @@ namespace Battlenet
 {
     namespace AccountMgr
     {
-        AccountOpResult CreateBattlenetAccount(std::string email, std::string password);
-        AccountOpResult ChangePassword(uint32 accountId, std::string newPassword);
-        bool CheckPassword(uint32 accountId, std::string password);
+        TC_GAME_API AccountOpResult CreateBattlenetAccount(std::string email, std::string password);
+        TC_GAME_API AccountOpResult ChangePassword(uint32 accountId, std::string newPassword);
+        TC_GAME_API bool CheckPassword(uint32 accountId, std::string password);
 
-        uint32 GetId(std::string const& username);
-        bool GetName(uint32 accountId, std::string& name);
-        uint32 GetIdByGameAccount(uint32 gameAccountId);
+        TC_GAME_API uint32 GetId(std::string const& username);
+        TC_GAME_API bool GetName(uint32 accountId, std::string& name);
+        TC_GAME_API uint32 GetIdByGameAccount(uint32 gameAccountId);
 
         std::string CalculateShaPassHash(std::string const& name, std::string const& password);
     }

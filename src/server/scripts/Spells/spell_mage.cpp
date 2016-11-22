@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -23,6 +23,7 @@
 
 #include "Player.h"
 #include "ScriptMgr.h"
+#include "SpellHistory.h"
 #include "SpellScript.h"
 #include "SpellAuraEffects.h"
 #include "Pet.h"
@@ -57,6 +58,7 @@ enum MageSpells
     SPELL_MAGE_WORGEN_FORM                       = 32819,
     SPELL_MAGE_SHEEP_FORM                        = 32820,
     SPELL_MAGE_GLYPH_OF_ETERNAL_WATER            = 70937,
+    SPELL_MAGE_SHATTERED_BARRIER                 = 55080,
     SPELL_MAGE_SUMMON_WATER_ELEMENTAL_PERMANENT  = 70908,
     SPELL_MAGE_SUMMON_WATER_ELEMENTAL_TEMPORARY  = 70907,
     SPELL_MAGE_GLYPH_OF_BLAST_WAVE               = 62126,
@@ -151,6 +153,11 @@ class spell_mage_arcane_potency : public SpellScriptLoader
         }
 };
 
+enum MageSpellIcons
+{
+    SPELL_ICON_MAGE_SHATTERED_BARRIER = 2945
+};
+
 // Incanter's Absorbtion
 class spell_mage_incanters_absorbtion_base_AuraScript : public AuraScript
 {
@@ -221,7 +228,7 @@ class spell_mage_blast_wave : public SpellScriptLoader
             }
 
         private:
-            uint32 _targetCount;
+            uint32 _targetCount =0;
         };
 
         SpellScript* GetSpellScript() const override
@@ -276,7 +283,7 @@ class spell_mage_blizzard : public SpellScriptLoader
        {
            PrepareSpellScript(spell_mage_blizzard_SpellScript);
 
-           bool Validate(SpellInfo const* /*spellInfo*/)
+           bool Validate(SpellInfo const* /*spellInfo*/) override
            {
                if (!sSpellMgr->GetSpellInfo(SPELL_MAGE_CHILLED_R1))
                    return false;
@@ -297,13 +304,13 @@ class spell_mage_blizzard : public SpellScriptLoader
                }
            }
 
-           void Register()
+           void Register() override
            {
                OnEffectHitTarget += SpellEffectFn(spell_mage_blizzard_SpellScript::AddChillEffect, EFFECT_0, SPELL_EFFECT_SCHOOL_DAMAGE);
            }
        };
 
-       SpellScript* GetSpellScript() const
+       SpellScript* GetSpellScript() const override
        {
            return new spell_mage_blizzard_SpellScript();
        }
@@ -326,22 +333,12 @@ class spell_mage_cold_snap : public SpellScriptLoader
 
             void HandleDummy(SpellEffIndex /*effIndex*/)
             {
-                Player* caster = GetCaster()->ToPlayer();
-                // immediately finishes the cooldown on Frost spells
-                const SpellCooldowns& cm = caster->GetSpellCooldownMap();
-                for (SpellCooldowns::const_iterator itr = cm.begin(); itr != cm.end();)
+                GetCaster()->GetSpellHistory()->ResetCooldowns([](SpellHistory::CooldownStorageType::iterator itr) -> bool
                 {
-                    SpellInfo const* spellInfo = sSpellMgr->EnsureSpellInfo(itr->first);
-
-                    if (spellInfo->SpellFamilyName == SPELLFAMILY_MAGE &&
-                        (spellInfo->GetSchoolMask() & SPELL_SCHOOL_MASK_FROST) &&
-                        spellInfo->Id != SPELL_MAGE_COLD_SNAP && spellInfo->GetRecoveryTime() > 0)
-                    {
-                        caster->RemoveSpellCooldown((itr++)->first, true);
-                    }
-                    else
-                        ++itr;
-                }
+                    SpellInfo const* spellInfo = sSpellMgr->AssertSpellInfo(itr->first);
+                    return spellInfo->SpellFamilyName == SPELLFAMILY_MAGE && (spellInfo->GetSchoolMask() & SPELL_SCHOOL_MASK_FROST) &&
+                        spellInfo->Id != SPELL_MAGE_COLD_SNAP && spellInfo->GetRecoveryTime() > 0;
+                }, true);
             }
 
             void Register() override
@@ -641,7 +638,7 @@ class spell_mage_glyph_of_ice_block : public SpellScriptLoader
             {
                 PreventDefaultAction();
                 // Remove Frost Nova cooldown
-                GetTarget()->ToPlayer()->RemoveSpellCooldown(SPELL_MAGE_FROST_NOVA, true);
+                GetTarget()->ToPlayer()->GetSpellHistory()->ResetCooldown(SPELL_MAGE_FROST_NOVA, true);
             }
 
             void Register() override
@@ -736,7 +733,7 @@ class spell_mage_living_bomb : public SpellScriptLoader
         {
             PrepareAuraScript(spell_mage_living_bomb_AuraScript);
 
-            bool Validate(SpellInfo const* spellInfo)
+            bool Validate(SpellInfo const* spellInfo) override
             {
                 if (!sSpellMgr->GetSpellInfo(uint32(spellInfo->Effects[EFFECT_1].CalcValue())))
                     return false;
@@ -794,9 +791,10 @@ class spell_mage_ice_barrier : public SpellScriptLoader
                    GetTarget()->CastSpell(GetTarget(), SPELL_MAGE_SHATTERED_BARRIER_FREEZE_R2, true);
            }
 
-           void Register()
+           void Register() override
            {
                 DoEffectCalcAmount += AuraEffectCalcAmountFn(spell_mage_ice_barrier_AuraScript::CalculateAmount, EFFECT_0, SPELL_AURA_SCHOOL_ABSORB);
+                AfterEffectRemove += AuraEffectRemoveFn(spell_mage_ice_barrier_AuraScript::AfterRemove, EFFECT_0, SPELL_AURA_SCHOOL_ABSORB, AURA_EFFECT_HANDLE_REAL);
                 AfterEffectRemove += AuraEffectRemoveFn(spell_mage_ice_barrier_AuraScript::AfterRemove, EFFECT_0, SPELL_AURA_SCHOOL_ABSORB, AURA_EFFECT_HANDLE_REAL);
            }
        };
@@ -833,7 +831,7 @@ class spell_mage_ignite : public SpellScriptLoader
             {
                 PreventDefaultAction();
 
-                SpellInfo const* igniteDot = sSpellMgr->EnsureSpellInfo(SPELL_MAGE_IGNITE);
+                SpellInfo const* igniteDot = sSpellMgr->AssertSpellInfo(SPELL_MAGE_IGNITE);
                 int32 pct = 8 * GetSpellInfo()->GetRank();
 
                 int32 amount = int32(CalculatePct(eventInfo.GetDamageInfo()->GetDamage(), pct) / igniteDot->GetMaxTicks());
@@ -1111,7 +1109,7 @@ class spell_mage_polymorph : public SpellScriptLoader
             }
 
         private:
-            Unit* _caster;
+            Unit* _caster = nullptr;
         };
 
         AuraScript* GetAuraScript() const override
@@ -1188,7 +1186,7 @@ class spell_mage_replenish_mana : public SpellScriptLoader
        {
            PrepareSpellScript(spell_mage_replenish_mana_SpellScript);
 
-           bool Validate(SpellInfo const* /*spellInfo*/)
+           bool Validate(SpellInfo const* /*spellInfo*/) override
            {
                if (!sSpellMgr->GetSpellInfo(SPELL_MAGE_IMPROVED_MANA_GEM_TRIGGERED))
                    return false;
@@ -1204,13 +1202,13 @@ class spell_mage_replenish_mana : public SpellScriptLoader
                }
            }
 
-           void Register()
+           void Register() override
            {
                AfterCast += SpellCastFn(spell_mage_replenish_mana_SpellScript::HandleImprovedManaGem);
            }
        };
 
-       SpellScript* GetSpellScript() const
+       SpellScript* GetSpellScript() const override
        {
            return new spell_mage_replenish_mana_SpellScript();
        }
@@ -1421,7 +1419,7 @@ class spell_mage_water_elemental_freeze : public SpellScriptLoader
        {
            PrepareSpellScript(spell_mage_water_elemental_freeze_SpellScript);
 
-           bool Validate(SpellInfo const* /*spellInfo*/)
+           bool Validate(SpellInfo const* /*spellInfo*/) override
            {
                if (!sSpellMgr->GetSpellInfo(SPELL_MAGE_FINGERS_OF_FROST))
                    return false;
@@ -1449,7 +1447,7 @@ class spell_mage_water_elemental_freeze : public SpellScriptLoader
                }
            }
 
-           void Register()
+           void Register() override
            {
                OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_mage_water_elemental_freeze_SpellScript::CountTargets, EFFECT_0, TARGET_UNIT_DEST_AREA_ENEMY);
                AfterCast += SpellCastFn(spell_mage_water_elemental_freeze_SpellScript::HandleImprovedFreeze);
@@ -1459,7 +1457,7 @@ class spell_mage_water_elemental_freeze : public SpellScriptLoader
            bool _didHit;
        };
 
-       SpellScript* GetSpellScript() const
+       SpellScript* GetSpellScript() const override
        {
            return new spell_mage_water_elemental_freeze_SpellScript();
        }

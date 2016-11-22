@@ -1,4 +1,4 @@
-# Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+# Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
 #
 # This file is free software; as a special exception the author gives
 # unlimited permission to copy and/or distribute it, with or without
@@ -8,17 +8,44 @@
 # WITHOUT ANY WARRANTY, to the extent permitted by law; without even the
 # implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-file(GLOB_RECURSE sources_ipc *.cpp *.h)
+CollectSourceFiles(
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  PRIVATE_SOURCES)
 
-set(ipc_SRCS
-  ${sources_ipc}
-)
+GroupSources(${CMAKE_CURRENT_SOURCE_DIR})
 
-include_directories(
-  ${CMAKE_BINARY_DIR}
-  ${CMAKE_SOURCE_DIR}/dep/zmqpp
-  ${CMAKE_SOURCE_DIR}/src/server/shared/
-  ${ZMQ_INCLUDE_DIR}
-)
+add_definitions(-DTRINITY_API_EXPORT_IPC)
 
-add_library(ipc STATIC ${ipc_SRCS})
+add_library(ipc ${PRIVATE_SOURCES})
+
+CollectIncludeDirectories(
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  PUBLIC_INCLUDES)
+
+target_include_directories(ipc
+  PUBLIC
+    ${PUBLIC_INCLUDES}
+  PRIVATE
+    ${CMAKE_CURRENT_BINARY_DIR})
+
+target_link_libraries(ipc
+  PUBLIC
+    shared
+    zmqpp)
+
+set_target_properties(ipc
+    PROPERTIES
+      FOLDER
+        "server")
+
+if( BUILD_SHARED_LIBS )
+  if( UNIX )
+    install(TARGETS ipc
+      LIBRARY
+        DESTINATION lib)
+  elseif( WIN32 )
+    install(TARGETS ipc
+      RUNTIME
+        DESTINATION "${CMAKE_INSTALL_PREFIX}")
+  endif()
+endif()

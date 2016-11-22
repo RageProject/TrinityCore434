@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
  * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -33,52 +33,73 @@
 #include "Log.h"
 #include "ProcessPriority.h"
 #include "RealmList.h"
-#include "SystemConfig.h"
+#include "GitRevision.h"
 #include "Util.h"
 #include "ZmqContext.h"
+#include "DatabaseLoader.h"
 #include <cstdlib>
 #include <iostream>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/filesystem/path.hpp>
 #include <boost/program_options.hpp>
 #include <openssl/opensslv.h>
 #include <openssl/crypto.h>
 
 using boost::asio::ip::tcp;
 using namespace boost::program_options;
+namespace fs = boost::filesystem;
 
 #ifndef _TRINITY_BNET_CONFIG
 # define _TRINITY_BNET_CONFIG  "bnetserver.conf"
+#endif
+
+#if PLATFORM == PLATFORM_WINDOWS
+#include "ServiceWin32.h"
+char serviceName[] = "bnetserver";
+char serviceLongName[] = "TrinityCore bnet service";
+char serviceDescription[] = "TrinityCore Battle.net emulator authentication service";
+/*
+* -1 - not in service mode
+*  0 - stopped
+*  1 - running
+*  2 - paused
+*/
+int m_ServiceStatus = -1;
+
+static boost::asio::deadline_timer* _serviceStatusWatchTimer;
+void ServiceStatusWatcher(boost::system::error_code const& error);
 #endif
 
 bool StartDB();
 void StopDB();
 void SignalHandler(const boost::system::error_code& error, int signalNumber);
 void KeepDatabaseAliveHandler(const boost::system::error_code& error);
-variables_map GetConsoleArguments(int argc, char** argv, std::string& configFile);
+variables_map GetConsoleArguments(int argc, char** argv, fs::path& configFile);
 
 boost::asio::io_service _ioService;
 boost::asio::deadline_timer _dbPingTimer(_ioService);
 uint32 _dbPingInterval;
-LoginDatabaseWorkerPool LoginDatabase;
 
 int main(int argc, char** argv)
 {
-    std::string configFile = _TRINITY_BNET_CONFIG;
+    auto configFile = fs::absolute(_TRINITY_BNET_CONFIG);
     auto vm = GetConsoleArguments(argc, argv, configFile);
     // exit if help is enabled
     if (vm.count("help"))
         return 0;
 
     std::string configError;
-    if (!sConfigMgr->LoadInitial(configFile, configError))
+    if (!sConfigMgr->LoadInitial(configFile.generic_string(),
+                                 std::vector<std::string>(argv, argv + argc),
+                                 configError))
     {
         printf("Error in config file: %s\n", configError.c_str());
         return 1;
     }
 
-    TC_LOG_INFO("server.bnetserver", "%s (bnetserver)", _FULLVERSION);
+    TC_LOG_INFO("server.bnetserver", "%s (bnetserver)", GitRevision::GetFullVersion());
     TC_LOG_INFO("server.bnetserver", "<Ctrl-C> to stop.\n");
-    TC_LOG_INFO("server.bnetserver", "Using configuration file %s.", configFile.c_str());
+    TC_LOG_INFO("server.bnetserver", "Using configuration file %s.", sConfigMgr->GetFilename().c_str());
     TC_LOG_INFO("server.bnetserver", "Using SSL version: %s (library: %s)", OPENSSL_VERSION_TEXT, SSLeay_version(SSLEAY_VERSION));
     TC_LOG_INFO("server.bnetserver", "Using Boost version: %i.%i.%i", BOOST_VERSION / 100000, BOOST_VERSION / 100 % 1000, BOOST_VERSION % 100);
 
@@ -162,32 +183,13 @@ bool StartDB()
 {
     MySQL::Library_Init();
 
-    std::string dbstring = sConfigMgr->GetStringDefault("LoginDatabaseInfo", "");
-    if (dbstring.empty())
-    {
-        TC_LOG_ERROR("server.bnetserver", "Database not specified");
+    // Load databases
+    DatabaseLoader loader("server.bnetserver", DatabaseLoader::DATABASE_NONE);
+    loader
+        .AddDatabase(LoginDatabase, "Login");
+
+    if (!loader.Load())
         return false;
-    }
-
-    int32 worker_threads = sConfigMgr->GetIntDefault("LoginDatabase.WorkerThreads", 1);
-    if (worker_threads < 1 || worker_threads > 32)
-    {
-        TC_LOG_ERROR("server.bnetserver", "Improper value specified for LoginDatabase.WorkerThreads, defaulting to 1.");
-        worker_threads = 1;
-    }
-
-    int32 synch_threads = sConfigMgr->GetIntDefault("LoginDatabase.SynchThreads", 1);
-    if (synch_threads < 1 || synch_threads > 32)
-    {
-        TC_LOG_ERROR("server.bnetserver", "Improper value specified for LoginDatabase.SynchThreads, defaulting to 1.");
-        synch_threads = 1;
-    }
-
-    if (!LoginDatabase.Open(dbstring, uint8(worker_threads), uint8(synch_threads)))
-    {
-        TC_LOG_ERROR("server.bnetserver", "Cannot connect to database");
-        return false;
-    }
 
     TC_LOG_INFO("server.bnetserver", "Started auth database connection pool.");
     sLog->SetRealmId(0); // Enables DB appenders when realm is set.
@@ -219,12 +221,13 @@ void KeepDatabaseAliveHandler(const boost::system::error_code& error)
     }
 }
 
-variables_map GetConsoleArguments(int argc, char** argv, std::string& configFile)
+variables_map GetConsoleArguments(int argc, char** argv, fs::path& configFile)
 {
     options_description all("Allowed options");
     all.add_options()
         ("help,h", "print usage message")
-        ("config,c", value<std::string>(&configFile)->default_value(_TRINITY_BNET_CONFIG), "use <arg> as configuration file")
+        ("config,c", value<fs::path>(&configFile)->default_value(fs::absolute(_TRINITY_BNET_CONFIG)),
+                     "use <arg> as configuration file")
         ;
     variables_map variablesMap;
     try

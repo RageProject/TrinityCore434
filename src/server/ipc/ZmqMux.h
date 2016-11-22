@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -26,7 +26,7 @@
  * Multiplexes zmq messages from many threads, 
  * and then passes them to another socket.
  */
-class ZmqMux : public ZMQTask
+class TC_IPC_API ZmqMux : public ZMQTask
 {
 public:
     ZmqMux(std::string from, std::string to);

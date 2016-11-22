@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
  * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -43,6 +43,21 @@ enum BattlegroundBracketId                                  // bracketId for lev
 
 // must be max value in PvPDificulty slot+1
 #define MAX_BATTLEGROUND_BRACKETS  16
+
+#pragma pack(push, 1)
+struct DBCPosition2D
+{
+    float X;
+    float Y;
+};
+
+struct DBCPosition3D
+{
+    float X;
+    float Y;
+    float Z;
+};
+#pragma pack(pop)
 
 enum AreaTeams
 {
@@ -255,6 +270,14 @@ enum AchievementCriteriaTypes
     ACHIEVEMENT_CRITERIA_TYPE_RECEIVE_EPIC_ITEM             = 91,
     ACHIEVEMENT_CRITERIA_TYPE_ROLL_NEED                     = 93,
     ACHIEVEMENT_CRITERIA_TYPE_ROLL_GREED                    = 94,
+/*
+    ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_HEALTH                = 95,
+    ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_POWER                 = 96,
+    ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_STAT                  = 97,
+    ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_SPELLPOWER            = 98,
+    ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_ARMOR                 = 99,
+    ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_RATING                = 100,
+*/
     ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_HIT_DEALT             = 101,
     ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_HIT_RECEIVED          = 102,
     ACHIEVEMENT_CRITERIA_TYPE_TOTAL_DAMAGE_RECEIVED         = 103,
@@ -363,6 +386,7 @@ enum SpawnMask
 
 enum FactionTemplateFlags
 {
+    FACTION_TEMPLATE_ENEMY_SPAR             = 0x00000020,   // guessed, sparring with enemies?
     FACTION_TEMPLATE_FLAG_PVP               = 0x00000800,   // flagged for PvP
     FACTION_TEMPLATE_FLAG_CONTESTED_GUARD   = 0x00001000,   // faction will attack players that were involved in PvP combats
     FACTION_TEMPLATE_FLAG_HOSTILE_BY_DEFAULT= 0x00002000
@@ -446,7 +470,7 @@ enum SpellCategoryFlags
 {
     SPELL_CATEGORY_FLAG_COOLDOWN_SCALES_WITH_WEAPON_SPEED   = 0x01, // unused
     SPELL_CATEGORY_FLAG_COOLDOWN_STARTS_ON_EVENT            = 0x04,
-    SPELL_CATEGORY_FLAG_COOLDOWN_EXPIRES_AT_MIDNIGHT        = 0x08
+    SPELL_CATEGORY_FLAG_COOLDOWN_EXPIRES_AT_DAILY_RESET     = 0x08
 };
 
 enum TotemCategoryType
